@@ -3,7 +3,7 @@ package com.bigdata.streaming.spark.scala.streaming.kafkatest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
-import com.bigdata.streaming.common.CommonHelper
+import com.bigdata.streaming.common.{CommonHelper, EvictingQueueImpl}
 import org.apache.spark._
 import org.apache.spark.scheduler._
 
@@ -13,7 +13,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
   private val taskKafkaMessages:Int={
     val maxRatePerPartition = sparkConf.get("spark.streaming.kafka.maxRatePerPartition","500").toInt
     val batchDuration = sparkConf.get("spark.streaming.userdefine.batch.duration","5000").toInt
-    batchDuration/1000 * maxRatePerPartition
+    (batchDuration/1000.00 * maxRatePerPartition).toInt
   }
 
   private val recordSizePerJob:Int=  sparkConf.get("spark.streaming.userdefine.record.size.per.job","10000").toInt
@@ -55,7 +55,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
 
   // 进行Task 级别的监控
   val taskAttemptStart:ConcurrentHashMap[String,Long] = new ConcurrentHashMap[String,Long]()
-  val taskQpsStat = CommonHelper.getInstance().collectHelper.createQueue(qpsEvictQueueSize)
+  val taskQpsQueue = new EvictingQueueImpl[Double](qpsEvictQueueSize)
   override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {
     val info = taskStart.taskInfo
     val taskAttemptKey = generateTaskAttemptKey(taskStart.stageId,taskStart.stageAttemptId,info)
@@ -93,9 +93,8 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
       val inputRateSecByDuration:Double= CommonHelper.divideRateAsSecond(taskKafkaMessages,duration,2)
       var  averageTaskQps = 0.0
       if(batchCounter.get()>avgStartBatch){
-        taskQpsStat.add(inputRateSecByDuration)
-        var sum = CommonHelper.getInstance().collectHelper.calculateQueueSum(taskQpsStat)
-        averageTaskQps = sum/taskQpsStat.size()
+        taskQpsQueue.add(inputRateSecByDuration)
+        averageTaskQps = taskQpsQueue.tryAverage()
       }
 
       val metrics = taskEnd.taskMetrics
@@ -118,7 +117,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
 
   // 进行Stage级别的监控
   val stageAttempts:ConcurrentHashMap[String,Long] = new ConcurrentHashMap[String,Long]()
-  val stageQpsStat = CommonHelper.getInstance().collectHelper.createQueue(qpsEvictQueueSize)
+  val stageQpsQueue = new EvictingQueueImpl[Double](qpsEvictQueueSize)
   override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = {
     val stageInfo = stageSubmitted.stageInfo
     if(stageInfo!=null && stageInfo.attemptId != -1 ){
@@ -145,9 +144,8 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
             val inputRateSecByDuration:Double= CommonHelper.divideRateAsSecond(stageInputSize,duration,2)
             var  averageStageQps = 0.0
             if(batchCounter.get()> avgStartBatch){
-              stageQpsStat.add(inputRateSecByDuration)
-              var sum = CommonHelper.getInstance().collectHelper.calculateQueueSum(stageQpsStat)
-              averageStageQps = qps(sum,stageQpsStat.size())
+              stageQpsQueue.add(inputRateSecByDuration)
+              averageStageQps = stageQpsQueue.tryAverage()
             }
             val str =
               s"""
@@ -185,7 +183,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
   // 进行Job级别的监控
   val jobAttempts:ConcurrentHashMap[Int,Long] = new ConcurrentHashMap[Int,Long]()
   // 进行Stage级别的监控
-  val jobQpsStat = CommonHelper.getInstance().collectHelper.createQueue(qpsEvictQueueSize)
+  val jobQpsStat = new EvictingQueueImpl[Double](qpsEvictQueueSize)
   override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
     val startIme = jobStart.time
     val jobId = jobStart.jobId
@@ -205,8 +203,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
             var avgJobQps = 0.0
             if(batchCounter.get()> avgStartBatch){
               jobQpsStat.add(listenedRate)
-              var sum = CommonHelper.getInstance().collectHelper.calculateQueueSum(jobQpsStat)
-              avgJobQps = qps(sum,jobQpsStat.size())
+              avgJobQps = jobQpsStat.tryAverage()
             }
             val str =
               s"""

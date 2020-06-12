@@ -197,7 +197,7 @@ public class CommonHelper {
     public CollectHelper collectHelper = new CollectHelper();
     protected class CollectHelper{
         private int maxSize;
-        public Queue<Double> createQueue(int size){
+        public LinkedBlockingQueue<Double> createQueue(int size){
             this.maxSize = size;
             return new LinkedBlockingQueue<>();
         }
@@ -206,13 +206,13 @@ public class CommonHelper {
             if(queue==null && queue.isEmpty()){
                 return 0.0;
             }
+            while(queue.size()>this.maxSize){
+                queue.remove();
+            }
             AtomicDouble sum = new AtomicDouble(0.0);
             queue.forEach(num->{
                 sum.addAndGet(num);
             });
-            while (queue.size()>this.maxSize){
-                queue.remove();
-            }
             return sum.get();
         }
 
@@ -413,19 +413,35 @@ public class CommonHelper {
     }
 
 
-    @Test
-    public void test(){
-        String output = "Executor task launch worker for task";
-        String thread = "Executor task launch worker for task 6";
-        if(thread.startsWith(output)){
-            String[] split = thread.split(" ");
-            String taskId = split[split.length - 1];
-            if(Integer.parseInt(taskId) % 2==0){
-                System.out.println(thread);
+
+    public static class TestForComm{
+        @Test
+        public void test(){
+            String output = "Executor task launch worker for task";
+            String thread = "Executor task launch worker for task 6";
+            if(thread.startsWith(output)){
+                String[] split = thread.split(" ");
+                String taskId = split[split.length - 1];
+                if(Integer.parseInt(taskId) % 2==0){
+                    System.out.println(thread);
+                }
+
             }
+            CommonHelper.currentThread("Executor task launch worker for task *");
+        }
+        @Test
+        public void testEvictingQueueImpl(){
+            EvictingQueueImpl<Integer> queue = new EvictingQueueImpl<>(5);
+            for (int i = 0; i < 100; i++) {
+                queue.add(i);
+            }
+            System.out.println(queue.size());
+            queue.forEach((e)-> System.out.println(e));
+            System.out.println(queue.trySum());
+            System.out.println(queue.tryAverage());
 
         }
-        CommonHelper.currentThread("Executor task launch worker for task *");
+
     }
 
 }

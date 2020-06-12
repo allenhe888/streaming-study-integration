@@ -5,7 +5,7 @@ import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-import com.bigdata.streaming.common.CommonHelper
+import com.bigdata.streaming.common.{CommonHelper, EvictingQueueImpl}
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.scheduler.{StreamingListener, StreamingListenerBatchCompleted, StreamingListenerBatchStarted, StreamingListenerBatchSubmitted}
 
@@ -57,7 +57,7 @@ class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
 
 
   val batchCounter = new AtomicLong(0)
-  val batchQpsStat = CommonHelper.getInstance().collectHelper.createQueue(qpsEvictQueueSize)
+  val batchQpsStat = new EvictingQueueImpl[Double](qpsEvictQueueSize)
   override def onBatchCompleted(batchCompleted: StreamingListenerBatchCompleted): Unit = {
     if(null !=batchCompleted && null != batchCompleted.batchInfo.batchTime && batchSubmitTimes.containsKey(batchCompleted.batchInfo.batchTime.milliseconds) ){
       val batchInfo = batchCompleted.batchInfo
@@ -92,20 +92,19 @@ class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
       var avgBatchQPS = 0.0
       if(batchCounter.get()> avgStartBatch){
         batchQpsStat.add(listenerQPS)
-        val sum = CommonHelper.getInstance().collectHelper.calculateQueueSum(batchQpsStat)
-        avgBatchQPS = qps(sum,batchQpsStat.size())
+        avgBatchQPS = batchQpsStat.tryAverage()
       }
 
       val str =
         s"""
            |Batch - ${batchCounter.incrementAndGet()}: 应于[ ${toDatetime(batchInfo.batchTime.milliseconds)}]时刻触发的Batch, inputRecordNum:${inputRecordNum}
-           |监听器 listenerElapsed:        ${listenerElapsed} 毫秒                                       listenerQPS:${listenerQPS}  (${qps(listenerQPS)}万/秒)
-           |监听器 submitToStart:          ${submitToStart}  毫秒:提交到Job1.run()                       submitToCompleted:${submitToCompleted} 毫秒:提交到所有Jobs run()完
-           |监听器 avgBatchQPS:            ${avgBatchQPS} (${qps(avgBatchQPS)}万/秒)
-           |submissionTime:                ${toHours(submissionTime)}
-           |processStart:                  ${toHours(processStart)}
-           |processEnd:                    ${toHours(processEnd)}    processElapsed:耗时${processingElapsed}毫秒        processingQPS:${processingQPS}(${qps(processingQPS)}万/秒)
-           |totalElapsed:                  ${totalElapsed}           schedulingElapsed:${schedulingElapsed}毫秒的调度
+           |Batch 监听器 listenerElapsed:        ${listenerElapsed} 毫秒                                       listenerQPS:${listenerQPS}  (${qps(listenerQPS)}万/秒)
+           |Batch 监听器 submitToStart:          ${submitToStart}  毫秒:提交到Job1.run()                       submitToCompleted:${submitToCompleted} 毫秒:提交到所有Jobs run()完
+           |Batch 监听器 avgBatchQPS:            ${avgBatchQPS} (${qps(avgBatchQPS)}万/秒)
+           |Batch submissionTime:                ${toHours(submissionTime)}
+           |Batch processStart:                  ${toHours(processStart)}
+           |Batch processEnd:                    ${toHours(processEnd)}    processElapsed:耗时${processingElapsed}毫秒        processingQPS:${processingQPS}(${qps(processingQPS)}万/秒)
+           |Batch totalElapsed:                  ${totalElapsed}           schedulingElapsed:${schedulingElapsed}毫秒的调度
            |--------------------------------------------------------------------------------------
            |""".stripMargin
       println(str)

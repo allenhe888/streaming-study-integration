@@ -199,7 +199,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             final FetchRequest.Builder request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
             if(SSparkHelper.stopAnExecutorTask(2,0)){
-                System.out.println(request.fetchData());
+//                System.out.println(request.fetchData());
             }
             log.debug("Sending {} fetch for partitions {} to broker {}", isolationLevel, request.fetchData().keySet(),
                     fetchTarget);

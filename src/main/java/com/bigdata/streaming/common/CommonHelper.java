@@ -9,7 +9,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.junit.Test;
 
-import java.io.IOException;
+import java.io.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
@@ -220,7 +220,6 @@ public class CommonHelper {
     }
 
 
-
     public static JDBCHelper getJDBCHelper(int poolSize,String url,String username,String password){
         return new JDBCHelper(poolSize,url,username,password);
     }
@@ -412,7 +411,39 @@ public class CommonHelper {
         return false;
     }
 
+    public IOHelper ioHelper = new IOHelper();
+    public static class IOHelper{
+        public static List<String> getLinesFromLocalFile(String filePath) throws IOException {
+            File file = new File(filePath);
+            if(!file.exists()){
+                throw new IllegalArgumentException("not exist FilePath: "+filePath);
+            }
+            LinkedList<String> list = new LinkedList<>();
+            BufferedReader br=null;
+            try {
+                br = new BufferedReader(new InputStreamReader(new FileInputStream(file)));
+                String line;
+                do{
+                    line=br.readLine();
+                    if(null!=line && !line.isEmpty()){
+                        list.addLast(line);
+                    }
+                }while (null!=line);
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } finally {
+                if(null!=br){
+                    try {
+                        br.close();
+                    } catch (IOException e) {
+                        br=null;
+                    }
+                }
+            }
+            return list;
+        }
 
+    }
 
     public static class TestForComm{
         @Test

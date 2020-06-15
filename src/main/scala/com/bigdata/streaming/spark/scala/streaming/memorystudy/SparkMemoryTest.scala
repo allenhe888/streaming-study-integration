@@ -146,7 +146,7 @@ class SparkMemoryTest extends SparkStreamingApiDemo{
       .put(CommKey.maxRatePerPartition, "500")
       .put(CommKey.reFromOffset, "0")
       .put(CommKey.maxPartitionOffset, (10000*500).toString())
-      .put(CommKey.fetchMaxBytes, String.valueOf(1024*1024))
+      .put(CommKey.maxPartitionFetchBytes, String.valueOf(1024*1024))
       .put(CommKey.consumerPollMs, String.valueOf(4098))
       .put(CommKey.avgStartBatch, String.valueOf(50))
       .put(CommKey.qpsQueueSize, String.valueOf(100))
@@ -159,7 +159,7 @@ class SparkMemoryTest extends SparkStreamingApiDemo{
       namespace.getString(CommKey.maxRatePerPartition).toInt,
       namespace.getString(CommKey.reFromOffset).toInt,
       namespace.getString(CommKey.maxPartitionOffset).toInt,
-      namespace.getString(CommKey.fetchMaxBytes).toInt,
+      namespace.getString(CommKey.maxPartitionFetchBytes).toInt,
       namespace.getString(CommKey.consumerPollMs).toInt,
       namespace.getString(CommKey.avgStartBatch).toInt,
       namespace.getString(CommKey.qpsQueueSize).toInt
@@ -175,7 +175,7 @@ class SparkMemoryTest extends SparkStreamingApiDemo{
       .put(CommKey.maxRatePerPartition, "500")
       .put(CommKey.reFromOffset, "0")
       .put(CommKey.maxPartitionOffset, (10000*500).toString())
-      .put(CommKey.fetchMaxBytes, String.valueOf(1024*1024))
+      .put(CommKey.maxPartitionFetchBytes, String.valueOf(1024*1024))
       .put(CommKey.consumerPollMs, String.valueOf(4098))
       .put(CommKey.avgStartBatch, String.valueOf(50))
       .put(CommKey.qpsQueueSize, String.valueOf(100))
@@ -189,7 +189,7 @@ class SparkMemoryTest extends SparkStreamingApiDemo{
       namespace.getString(CommKey.maxRatePerPartition).toInt,
       namespace.getString(CommKey.reFromOffset).toInt,
       namespace.getString(CommKey.maxPartitionOffset).toInt,
-      namespace.getString(CommKey.fetchMaxBytes).toInt,
+      namespace.getString(CommKey.maxPartitionFetchBytes).toInt,
       namespace.getString(CommKey.consumerPollMs).toInt,
       namespace.getString(CommKey.avgStartBatch).toInt,
       namespace.getString(CommKey.qpsQueueSize).toInt

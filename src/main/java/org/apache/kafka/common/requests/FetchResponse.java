@@ -25,13 +25,11 @@ import org.apache.kafka.common.protocol.Errors;
 
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * This wrapper supports all versions of the Fetch API
@@ -160,6 +158,15 @@ public class FetchResponse extends AbstractResponse {
             return result;
         }
 
+        private int recordSize(){
+            Iterator<Record> it = this.records.records().iterator();
+            int size= 0;
+            while (it.hasNext()){
+                size+=1;
+            }
+            return size;
+        }
+
         @Override
         public String toString() {
             return "(error=" + error +
@@ -167,6 +174,7 @@ public class FetchResponse extends AbstractResponse {
                     ", lastStableOffset = " + lastStableOffset +
                     ", logStartOffset = " + logStartOffset +
                     ", abortedTransactions = " + abortedTransactions +
+//                    ", recordSize = " + recordSize() +
                     ", recordsSizeInBytes=" + records.sizeInBytes() + ")";
         }
 

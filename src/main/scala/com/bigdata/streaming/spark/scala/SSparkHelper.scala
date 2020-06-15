@@ -253,4 +253,9 @@ object SSparkHelper{
     BigDecimal(num)./(BigDecimal(b)).setScale(2,RoundingMode.HALF_UP).doubleValue()
   }
 
+  def qpsAsSecond(num:Double,b:Double): Double ={
+    BigDecimal(num)./(BigDecimal(b)./(BigDecimal(1000))).setScale(2,RoundingMode.HALF_UP).doubleValue()
+  }
+
+
 }

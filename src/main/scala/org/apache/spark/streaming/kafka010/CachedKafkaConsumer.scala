@@ -70,6 +70,11 @@ class CachedKafkaConsumer[K, V] private(
     }
 
     if (!buffer.hasNext()) { poll(timeout,pollCounter) }
+    val count = new AtomicInteger(0)
+    while (!buffer.hasNext && count.incrementAndGet() <10){
+      poll(timeout,pollCounter)
+      Thread.sleep(10)
+    }
     assert(buffer.hasNext(),
       s"Failed to get records for $groupId $topic $partition $offset after polling for $timeout")
     var record = buffer.next()

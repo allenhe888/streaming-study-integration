@@ -43,7 +43,7 @@ public class ConsumerPerformanceTest extends KafkaDevHelper{
 
     @Test
     public void testStringPerfAssign_maxPollRec500_fetchBytes1M(){
-        String argsStr = "--bootstrapServer ldsver51:9092 --topic testStringPerf --maxPollRecords 500 --fetchMaxBytes 1048576 --recordNum 4000000";
+        String argsStr = "--bootstrapServer ldsver51:9092 --topic testStringPerf --maxPollRecords 500 --maxPartitionFetchBytes 1048576 --recordNum 4000000";
         new ConsumerPerformanceTest().doAssignPerformanceTest(argsStr.split(CommKey.EMPTY_STRING));
     }
 
@@ -81,7 +81,7 @@ public class ConsumerPerformanceTest extends KafkaDevHelper{
                 .put(CommKey.partitions, "0")
                 .put(CommKey.groupId, "java-consumer-assign-perf")
                 .put(CommKey.maxPollRecords, String.valueOf(500))
-                .put(CommKey.fetchMaxBytes, String.valueOf(1048576))
+                .put(CommKey.maxPartitionFetchBytes, String.valueOf(1048576))
                 .put(CommKey.startOffset, "0")
                 .put(CommKey.recordNum, String.valueOf(10000 * 800))
                 .put(CommKey.batchIntervalSec, "10")
@@ -93,7 +93,7 @@ public class ConsumerPerformanceTest extends KafkaDevHelper{
                 namespace.getString(CommKey.partitions),
                 namespace.getString(CommKey.groupId),
                 Integer.parseInt(namespace.getString(CommKey.maxPollRecords)),
-                Integer.parseInt(namespace.getString(CommKey.fetchMaxBytes)),
+                Integer.parseInt(namespace.getString(CommKey.maxPartitionFetchBytes)),
                 Integer.parseInt(namespace.getString(CommKey.startOffset)),
                 Integer.parseInt(namespace.getString(CommKey.recordNum)),
                 Integer.parseInt(namespace.getString(CommKey.batchIntervalSec)),

@@ -76,15 +76,25 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
 
   }
 
+
+
+
+
+
   @Test
   def testKafkaDStream_4secBatchDuration_500PerPart_1mFetchByte():Unit={
-    doSimpleKafkaDStreamPerfInLoop(6000,bootstrapServer,groupId,"testStringPerf",500,4200000,10000*500,1024*1024,4098,20,100)
+//    doSimpleKafkaDStreamPerfInLoop(6000,bootstrapServer,groupId,"testStringPerf",500,4200000,10000*500,1024*1024,4098,20,100)
+    val argStr = "_batchDuration 6000 _bootstrapServers ldsver51:9092 _isRemote false _isClusterMode false " +
+      "_maxRatePerPartition 50000 _maxPartitionOffset 10000000 _fetchMaxBytes 50485670 " +
+      "_avgStartBatch 30 _qpsQueueSize 20 _executorNum 1 _executorMemory 1600M _enableBackPressure false"
+    doMain(argStr.split(CommKey.EMPTY_STRING))
   }
 
   @Test
   def testKafkaDStream_batch1s_2000PerPart_10mFetchByte():Unit={
-    val argStr = "_batchDuration 1000 _bootstrapServers ldsver51:9092 _isRemote false _isClusterMode false " +
-      "_maxRatePerPartition 50000 _maxPartitionOffset 10000000 _fetchMaxBytes 50485670 " +
+    val argStr = "_batchDuration 1000 _isRemote false _isClusterMode false " +
+      "_bootstrapServers ldsver51:9092 _topic testStringPerf _partitions 2 " +
+      "_maxRatePerPartition 2000 _maxPartitionOffset 8000000 _maxPartitionFetchBytes 1 _averageBytesPerRecord 265 " +
       "_avgStartBatch 30 _qpsQueueSize 20 _executorNum 1 _executorMemory 1600M _enableBackPressure false"
     doMain(argStr.split(CommKey.EMPTY_STRING))
   }
@@ -93,21 +103,6 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
   def testKafkaOutOfRangeBug():Unit={
     val argStr = "_batchDuration 2000 _bootstrapServers ldsver51:9092 _isRemote false _isClusterMode false _maxPartitionOffset 4600000 _maxRatePerPartition 5000"
     doMain(argStr.split(CommKey.EMPTY_STRING))
-//    doSimpleKafkaDStreamPerfInLoop(1000,bootstrapServer,groupId,"testStringPerf",1000,
-//      4000000,10000*500,1024*1024*10,4098,20,100)
-  }
-
-
-  @Test
-  def testEvictingSum(): Unit ={
-//    val queue:EvictingQueue[java.lang.Double] = EvictingQueue.create(100)
-//    queue.add(Math.random())
-//    queue.add(Math.random())
-//    queue.add(Math.random())
-//    queue.add(Math.random())
-//
-//    val avg = collectHelper.calculateQueueSum(queue)
-//    println(avg)
   }
 
 
@@ -139,7 +134,7 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
       .put(CommKey.maxRatePerPartition, "500")
       .put(CommKey.reFromOffset, "0")
       .put(CommKey.maxPartitionOffset, (10000*800).toString())
-      .put(CommKey.fetchMaxBytes, String.valueOf(1024*1024))
+      .put(CommKey.maxPartitionFetchBytes, String.valueOf(1024*1024))
       .put(CommKey.consumerPollMs, String.valueOf(4098))
       .put(CommKey.avgStartBatch, String.valueOf(50))
       .put(CommKey.qpsQueueSize, String.valueOf(100))
@@ -149,6 +144,8 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
       .put(CommKey.executorNum, String.valueOf(1))
       .put(CommKey.executorMemory, "1600m")
       .put(CommKey.enableBackPressure, "false")
+      .put(CommKey.partitions, String.valueOf(16))
+      .put(CommKey.averageBytesPerRecord, String.valueOf(260))
       .build(),true,"_")
 
 
@@ -160,7 +157,7 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
       namespace.getString(CommKey.maxRatePerPartition).toInt,
       namespace.getString(CommKey.reFromOffset).toInt,
       namespace.getString(CommKey.maxPartitionOffset).toInt,
-      namespace.getString(CommKey.fetchMaxBytes).toInt,
+      namespace.getString(CommKey.maxPartitionFetchBytes).toInt,
       namespace.getString(CommKey.consumerPollMs).toInt,
       namespace.getString(CommKey.avgStartBatch).toInt,
       namespace.getString(CommKey.qpsQueueSize).toInt,
@@ -169,17 +166,20 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
       namespace.getString(CommKey.jars),
       namespace.getString(CommKey.executorNum).toInt,
       namespace.getString(CommKey.executorMemory),
-      namespace.getString(CommKey.enableBackPressure).toBoolean
+      namespace.getString(CommKey.enableBackPressure).toBoolean,
+      namespace.getString(CommKey.partitions).toInt,
+      namespace.getString(CommKey.averageBytesPerRecord).toInt
     )
 
   }
 
 
-  def doSimpleKafkaDStreamPerfInLoop(batchDuration:Int,bootstrapServer:String,groupId:String,topic:String,maxRatePerPart:Int,
-                                     reFromOffset:Long, maxPartitionOffset: Long,fetchMaxBytes:Int,consumerPollMs:Int=4098,
-                                     avgStartBatch:Int=50,qpsQueueSize:Int=100,isRemote:Boolean=false,
-                                     isClusterMode:Boolean=false,jarsString:String="",executorNum:Int=1,
-                                     executorMemory:String="1024M",enableBackPressure:Boolean=false):Unit={
+  def doSimpleKafkaDStreamPerfInLoop(batchDuration:Int, bootstrapServer:String, groupId:String, topic:String, maxRatePerPart:Int,
+                                     reFromOffset:Long, maxPartitionOffset: Long, maxPartitionFetchBytes:Int, consumerPollMs:Int=4098,
+                                     avgStartBatch:Int=50, qpsQueueSize:Int=100, isRemote:Boolean=false,
+                                     isClusterMode:Boolean=false, jarsString:String="", executorNum:Int=1,
+                                     executorMemory:String="1024M", enableBackPressure:Boolean=false,
+                                     partitions:Int=16, averageBytesPerRecord:Int= 260):Unit={
 
     var testJars:List[String] = jarsString.split(",").toList
     if(isRemote &&  jarsString.isEmpty){
@@ -200,7 +200,10 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
       "spark.streaming.userdefine.batch.duration" ->batchDuration.toString,
       "spark.streaming.userdefine.avg.start.batch" ->avgStartBatch.toString,
       "spark.streaming.userdefine.qps.evict.queue.size" ->qpsQueueSize.toString,
-      "spark.streaming.userdefine.record.size.per.job" ->(batchDuration/1000 * maxRatePerPart * 2).toString,
+//      "spark.streaming.userdefine.record.size.per.job" -> (batchDuration * maxRatePerPart * partitions /1000.00).toInt.toString,
+      "spark.streaming.userdefine.config.record.num.per.task" -> (batchDuration * maxRatePerPart /1000.00).toInt.toString,
+      "spark.streaming.userdefine.partition.num" ->(partitions).toString,
+      "spark.streaming.userdefine.average.bytes.per.record" ->(averageBytesPerRecord).toString,
       "spark.extraListeners" ->classOf[KafkaSparkListener].getCanonicalName,//添加Task,Stage,Job级别的监控;
       "spark.streaming.kafka.maxRatePerPartition" ->maxRatePerPart.toString
     ))
@@ -212,7 +215,7 @@ class TestSimpleKafkaDStream extends SparkStreamingApiDemo {
     kafkaProps.put("key.deserializer", classOf[StringDeserializer].getName)
     kafkaProps.put("value.deserializer", classOf[StringDeserializer].getName)
     kafkaProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    kafkaProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(fetchMaxBytes))
+    kafkaProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(maxPartitionFetchBytes * 1024 * 1024))
     kafkaProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     kafkaProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
 

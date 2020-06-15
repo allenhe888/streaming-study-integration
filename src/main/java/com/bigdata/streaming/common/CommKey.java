@@ -3,9 +3,11 @@ package com.bigdata.streaming.common;
 public class CommKey {
     public final static String EMPTY_STRING = " ";
 
+    //Kafka Producer
     public static String numRecords = "numRecords";
     public static String brokerList = "brokerList";
     public static String sampleFile = "sampleFile";
+    public static String canParsedKeys = "canParsedKeys";
 
 
     // Kafka Key
@@ -16,21 +18,13 @@ public class CommKey {
     public static String kafkaPollMaxRetries = "kafkaPollMaxRetries";
     public static String enableAutoCommit = "enableAutoCommit";
     public static String groupId = "groupId";
-    public static String fetchMaxBytes = "fetchMaxBytes";
+    public static String maxPartitionFetchBytes = "maxPartitionFetchBytes";
     public static String maxPollRecords = "maxPollRecords";
     public static String consumerPollMs = "consumerPollMs";
     public static String KeyDeserializer = "KeyDeserializer";
     public static String ValueDeserializer = "ValueDeserializer";
     public static String commitOffsetsForeach = "commitOffsetsForeach";
     public static String isPrintSucceed = "isPrintSucceed";
-
-    public static String startOffset = "startOffset";
-    public static String recordNum = "recordNum";
-    public static String batchIntervalSec = "batchIntervalSec";
-    public static String reportIntervalSec = "reportIntervalSec";
-    public static String reFromOffset = "reFromOffset";
-    public static String maxPartitionOffset = "maxPartitionOffset";
-    public static String enableBackPressure = "enableBackPressure";
 
     // Spark Key
     public static String master = "master";
@@ -43,6 +37,16 @@ public class CommKey {
     public static String qpsQueueSize = "qpsQueueSize";
     public static String executorNum = "executorNum";
     public static String executorMemory = "executorMemory";
+
+    // userdefine 自定义key
+    public static String startOffset = "startOffset";
+    public static String recordNum = "recordNum";
+    public static String batchIntervalSec = "batchIntervalSec";
+    public static String reportIntervalSec = "reportIntervalSec";
+    public static String reFromOffset = "reFromOffset";
+    public static String maxPartitionOffset = "maxPartitionOffset";
+    public static String enableBackPressure = "enableBackPressure";
+    public static String averageBytesPerRecord = "averageBytesPerRecord";
 
 
 }

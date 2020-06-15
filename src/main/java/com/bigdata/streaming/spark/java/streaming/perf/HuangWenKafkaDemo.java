@@ -21,13 +21,11 @@ public class HuangWenKafkaDemo extends SparkDevHelper {
 
     @Test
     public void TestMain(){
-        String argsString = "ldsver51:9092 testStringPerf sparkKafkaGroupId02 1000 10000 true true true 2 10485760";
-        /*
-         */
-        HuangWenKafkaDemo.main(argsString.split(" "));
+        String argsString = "ldsver51:9092 testTopic sparkKafkaGroupId03 1000 10000 true false false 5 23880000 1194";
+        doSparkKafkaDStreamTest(argsString.split(" "));
     }
 
-    public static void main(String[] args) {
+    private void doSparkKafkaDStreamTest(String[] args){
         String bootstrapServers = "ldsver51:9092";
         if(args.length>0){
             bootstrapServers= args[0];
@@ -66,9 +64,13 @@ public class HuangWenKafkaDemo extends SparkDevHelper {
         if(args.length > 8) {
             partitions = Integer.parseInt(args[8]);
         }
-        int fetchBytes = 1024*1024;
+        int maxPartitionFetchBytes = 1024*1024;
         if(args.length > 9) {
-            fetchBytes = Integer.parseInt(args[9]);
+            maxPartitionFetchBytes = Integer.parseInt(args[9]);
+        }
+        int averageBytesPerRecord = 1197;
+        if(args.length > 10) {
+            averageBytesPerRecord = Integer.parseInt(args[10]);
         }
         // SparkStreaming 运行环境 local表示本地 如需在环境中需要删除
         SparkConf sparkConf = new SparkConf().setAppName(HuangWenKafkaDemo.class.getSimpleName());
@@ -87,9 +89,11 @@ public class HuangWenKafkaDemo extends SparkDevHelper {
         sparkConf.set("spark.extraListeners", KafkaSparkListener.class.getName());
         sparkConf.set("spark.streaming.userdefine.batch.duration", String.valueOf(batchDuration));
         sparkConf.set("spark.streaming.userdefine.avg.start.batch", "20");
-        sparkConf.set("spark.streaming.userdefine.record.size.per.job", String.valueOf((int)(batchDuration/1000.00 * maxRatePerPartition * partitions)));
+        sparkConf.set("spark.streaming.userdefine.config.record.num.per.task", String.valueOf((int)(batchDuration/1000.00 * maxRatePerPartition)));
+        sparkConf.set("spark.streaming.userdefine.partition.num", String.valueOf(partitions));
+        sparkConf.set("spark.streaming.userdefine.average.bytes.per.record", String.valueOf(averageBytesPerRecord));
         // 获取jssc 以及设置获取流的时间
-        JavaStreamingContext jssc = new JavaStreamingContext(sparkConf, Durations.seconds(batchDuration));
+        JavaStreamingContext jssc = new JavaStreamingContext(sparkConf, Durations.milliseconds(batchDuration));
         // 加上Streaming Batch级别的监控
         jssc.addStreamingListener(new KafkaStreamingListener(jssc.ssc()));
 
@@ -106,7 +110,7 @@ public class HuangWenKafkaDemo extends SparkDevHelper {
         // 设置自动提交offset 注意：自动提交有数据丢失的可能
         kafkaParams.put("enable.auto.commit", enableAutoCommit);
         // 添加fetchMaxBytes参数
-        kafkaParams.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, fetchBytes);
+        kafkaParams.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes);
 
         Collection<String> topics = Arrays.asList(topic.split(","));
 
@@ -126,6 +130,10 @@ public class HuangWenKafkaDemo extends SparkDevHelper {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    public static void main(String[] args) {
+      new HuangWenKafkaDemo().doSparkKafkaDStreamTest(args);
     }
 
 }

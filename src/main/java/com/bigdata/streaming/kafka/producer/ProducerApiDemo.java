@@ -51,7 +51,7 @@ public class ProducerApiDemo extends KafkaDevHelper.ProducerHelp {
         ));
     }
 
-//    public void sendDataByProducer(String[] args) throws Exception {
+//    public void sendWithKeys(String[] args) throws Exception {
 //
 //        Namespace namespace = KafkaDevHelper.getNamespaceByArgsParser(args,ImmutableMap.<String, String>builder()
 //                .put(CommKey.bootstrapServers, bootstrapServers)

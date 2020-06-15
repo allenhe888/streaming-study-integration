@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 import com.bigdata.streaming.common.{CommonHelper, EvictingQueueImpl}
+import com.bigdata.streaming.spark.scala.SSparkHelper
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.scheduler.{StreamingListener, StreamingListenerBatchCompleted, StreamingListenerBatchStarted, StreamingListenerBatchSubmitted}
 
@@ -14,6 +15,15 @@ import scala.math.BigDecimal.RoundingMode
 class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
 
   private val qpsEvictQueueSize = ssc.sparkContext.getConf.get("spark.streaming.userdefine.qps.evict.queue.size","100").toInt
+
+  private val sparkConf = ssc.sparkContext.getConf
+  private val configRecordNumPerTask:Int=  sparkConf.get("spark.streaming.userdefine.config.record.num.per.task","100000").toInt
+  private val partitionNum = sparkConf.get("spark.streaming.userdefine.partition.num","16").toInt
+  private val configStageRecordNum:Int = configRecordNumPerTask * partitionNum
+  private val avgBytesPerRecord = sparkConf.get("spark.streaming.userdefine.average.bytes.per.record","260").toInt
+  private val configStageRecordMiBytes:Double = configStageRecordNum * avgBytesPerRecord /1048576.0
+
+
   private val avgStartBatch = ssc.sparkContext.getConf.get("spark.streaming.userdefine.avg.start.batch","20").toInt
   // 先提交 "JobScheduler"线程: case JobStarted(job, startTime) => handleJobStart(job, startTime)
   /**
@@ -58,6 +68,7 @@ class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
 
   val batchCounter = new AtomicLong(0)
   val batchQpsStat = new EvictingQueueImpl[Double](qpsEvictQueueSize)
+  val batchFlowRateStat = new EvictingQueueImpl[Double](qpsEvictQueueSize)
   override def onBatchCompleted(batchCompleted: StreamingListenerBatchCompleted): Unit = {
     if(null !=batchCompleted && null != batchCompleted.batchInfo.batchTime && batchSubmitTimes.containsKey(batchCompleted.batchInfo.batchTime.milliseconds) ){
       val batchInfo = batchCompleted.batchInfo
@@ -77,6 +88,11 @@ class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
       val submitToStart = (listenerStart - listenerSubmit)/1000000.00  //从生成jobs后提交开始, 到第一个job开始job.run();这启动的submitToStart()时间;
       val submitToCompleted = (listenerCompleted - listenerSubmit)/1000000.00  //从生成jobs后提交开始, 到第一个job开始job.run();这启动的submitToStart()时间;
 
+      val listenerFlowRate= if(listenerElapsed > 0){
+        SSparkHelper.qpsAsSecond(configStageRecordMiBytes,listenerElapsed)
+      }else 0.0
+
+
       val submissionTime = batchInfo.submissionTime
       val processStart = batchInfo.processingStartTime.get
       val processEnd = batchInfo.processingEndTime.get
@@ -95,6 +111,16 @@ class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
         avgBatchQPS = batchQpsStat.tryAverage()
       }
 
+
+      val processingFlowRate= if(listenerElapsed > 0){
+          SSparkHelper.qpsAsSecond(configStageRecordMiBytes,processingElapsed)
+        }else 0.0
+      var avgProcessFlowRate = 0.0
+      if(batchCounter.get()> avgStartBatch){
+        batchFlowRateStat.add(processingFlowRate)
+        avgProcessFlowRate = batchFlowRateStat.tryAverage()
+      }
+
       val str =
         s"""
            |Batch - ${batchCounter.incrementAndGet()}: 应于[ ${toDatetime(batchInfo.batchTime.milliseconds)}]时刻触发的Batch, inputRecordNum:${inputRecordNum}
@@ -105,6 +131,8 @@ class KafkaStreamingListener(ssc: StreamingContext) extends StreamingListener{
            |Batch processStart:                  ${toHours(processStart)}
            |Batch processEnd:                    ${toHours(processEnd)}    processElapsed:耗时${processingElapsed}毫秒        processingQPS:${processingQPS}(${qps(processingQPS)}万/秒)
            |Batch totalElapsed:                  ${totalElapsed}           schedulingElapsed:${schedulingElapsed}毫秒的调度
+           |Batch listenerFlowRate:              ${listenerFlowRate} Mi/sec
+           |Batch processingFlowRate:            ${processingFlowRate} Mi/sec       avgProcessFlowRate:${avgProcessFlowRate} Mi/sec
            |--------------------------------------------------------------------------------------
            |""".stripMargin
       println(str)

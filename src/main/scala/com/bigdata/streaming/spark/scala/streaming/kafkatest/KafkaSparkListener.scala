@@ -4,19 +4,22 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
 import com.bigdata.streaming.common.{CommonHelper, EvictingQueueImpl}
+import com.bigdata.streaming.spark.scala.SSparkHelper
 import org.apache.spark._
 import org.apache.spark.scheduler._
 
 import scala.math.BigDecimal.RoundingMode
 
 class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
-  private val taskKafkaMessages:Int={
-    val maxRatePerPartition = sparkConf.get("spark.streaming.kafka.maxRatePerPartition","500").toInt
-    val batchDuration = sparkConf.get("spark.streaming.userdefine.batch.duration","5000").toInt
-    (batchDuration/1000.00 * maxRatePerPartition).toInt
-  }
 
-  private val recordSizePerJob:Int=  sparkConf.get("spark.streaming.userdefine.record.size.per.job","10000").toInt
+  private val configRecordNumPerTask:Int=  sparkConf.get("spark.streaming.userdefine.config.record.num.per.task","100000").toInt
+  private val partitionNum = sparkConf.get("spark.streaming.userdefine.partition.num","16").toInt
+  private val configStageRecordNum:Int = configRecordNumPerTask * partitionNum
+
+  private val avgBytesPerRecord = sparkConf.get("spark.streaming.userdefine.average.bytes.per.record","260").toInt
+
+  private val configTaskRecordMiBytes:Double = configRecordNumPerTask * avgBytesPerRecord /1048576.0
+  private val configStageRecordMiBytes:Double = configStageRecordNum * avgBytesPerRecord /1048576.0
 
 
   private val avgStartBatch = sparkConf.get("spark.streaming.userdefine.avg.start.batch","20").toInt
@@ -56,6 +59,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
   // 进行Task 级别的监控
   val taskAttemptStart:ConcurrentHashMap[String,Long] = new ConcurrentHashMap[String,Long]()
   val taskQpsQueue = new EvictingQueueImpl[Double](qpsEvictQueueSize)
+  val taskFlowRateQueue = new EvictingQueueImpl[Double](qpsEvictQueueSize)
   override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {
     val info = taskStart.taskInfo
     val taskAttemptKey = generateTaskAttemptKey(taskStart.stageId,taskStart.stageAttemptId,info)
@@ -89,8 +93,8 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
       }
       val duration = info.duration
 
-      val inputRateSecByListener:Double= CommonHelper.divideRateAsSecond(taskKafkaMessages,listenedDuration,2)
-      val inputRateSecByDuration:Double= CommonHelper.divideRateAsSecond(taskKafkaMessages,duration,2)
+      val inputRateSecByListener:Double= CommonHelper.divideRateAsSecond(configRecordNumPerTask,listenedDuration,2)
+      val inputRateSecByDuration:Double= CommonHelper.divideRateAsSecond(configRecordNumPerTask,duration,2)
       var  averageTaskQps = 0.0
       if(batchCounter.get()>avgStartBatch){
         taskQpsQueue.add(inputRateSecByDuration)
@@ -98,14 +102,26 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
       }
 
       val metrics = taskEnd.taskMetrics
+
+      val durationFlowRate= if(duration > 0){
+        SSparkHelper.qpsAsSecond(configTaskRecordMiBytes ,duration)
+      }else 0.0
+      var  averageDurationFlowRate = 0.0
+      if(batchCounter.get()>avgStartBatch){
+        taskFlowRateQueue.add(durationFlowRate)
+        averageDurationFlowRate = taskFlowRateQueue.tryAverage()
+      }
+
+
       val str =
         s"""
            |task listenedDuration:      ${listenedDuration}
            |task duration:              ${duration}   耗时分析: RunTime:${metrics.executorRunTime}, DeserTime:${metrics.executorDeserializeTime}, DeserCpuTime:${metrics.executorDeserializeCpuTime}, resultSerTime:${metrics.resultSerializationTime}, jvmGCTime:${metrics.jvmGCTime}
-           |task kafkaNum:              ${taskKafkaMessages}
+           |task kafkaNum:              ${configRecordNumPerTask}
            |task inputRateSecByListener:${inputRateSecByListener}-- ${inputRateSecByListener/10000}万/秒
            |task inputRateSecByDuration:${inputRateSecByDuration}-- ${inputRateSecByDuration/10000}万/秒
            |task averageTaskQps:        ${averageTaskQps}--         ${averageTaskQps/10000}万/秒
+           |task durationFlowRate:      ${durationFlowRate} Mi/sec            averageDurationFlowRate:${averageDurationFlowRate} Mi/sec
            |--------------------------------------------------------------------------------------
            |""".stripMargin
       println(str)
@@ -135,18 +151,22 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
       if(stageAttempts.containsKey(stageAttemptKey)){
         var listenedDuration = (System.nanoTime() - stageAttempts.get(stageAttemptKey))/1000000.00
         if(listenedDuration>0){
-          val stageInputSize = taskKafkaMessages * stageInfo.numTasks
+          val stageInputSize = configRecordNumPerTask * stageInfo.numTasks
           val listenerStageQps:Double= CommonHelper.divideRateAsSecond(stageInputSize,listenedDuration,2)
           val metrics = stageInfo.taskMetrics
           val duration = stageInfo.completionTime.get - stageInfo.submissionTime.get
           if(duration>0){
-//            val inputRateSecByDuration:Double= CommonHelper.divideRateAsSecond(stageInputSize,duration,2)
             val inputRateSecByDuration:Double= CommonHelper.divideRateAsSecond(stageInputSize,duration,2)
             var  averageStageQps = 0.0
             if(batchCounter.get()> avgStartBatch){
               stageQpsQueue.add(inputRateSecByDuration)
               averageStageQps = stageQpsQueue.tryAverage()
             }
+
+            val stageFlowRate= if(duration > 0){
+              SSparkHelper.qpsAsSecond(configStageRecordMiBytes ,duration)
+            }else 0.0
+
             val str =
               s"""
                  |stage listenedDuration:      ${listenedDuration}毫秒
@@ -155,16 +175,7 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
                  |stage listenerStageQps:      ${listenerStageQps}-- ${qps(listenerStageQps)}万/秒
                  |stage inputRateSecByDuration:${inputRateSecByDuration} (${qps(inputRateSecByDuration)}万/秒)
                  |stage avgStage:              ${averageStageQps} (${qps(averageStageQps)}万/秒)
-                 |--------------------------------------------------------------------------------------
-                 |""".stripMargin
-            println(str)
-          }else{
-            val str =
-              s"""
-                 |stage listenedDuration:      ${listenedDuration}毫秒
-                 |stage duration:              ${duration}   stage耗时分析: RunTime:${metrics.executorRunTime}, DeserTime:${metrics.executorDeserializeTime}, DeserCpuTime:${metrics.executorDeserializeCpuTime}, resultSerTime:${metrics.resultSerializationTime}, jvmGCTime:${metrics.jvmGCTime}
-                 |stage stageInputSize:        ${stageInputSize}
-                 |stage listenerStageQps:${listenerStageQps}-- ${qps(listenerStageQps)}万/秒
+                 |stage stageFlowRate:         ${stageFlowRate} Mi/sec
                  |--------------------------------------------------------------------------------------
                  |""".stripMargin
             println(str)
@@ -199,16 +210,21 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
       if(listenedDuration>0){
         jobEnd.jobResult match {
           case JobSucceeded =>{
-            val listenedRate:Double= CommonHelper.divideRateAsSecond(recordSizePerJob,listenedDuration,2)
+            val listenedRate:Double= CommonHelper.divideRateAsSecond(configStageRecordNum,listenedDuration,2)
+
             var avgJobQps = 0.0
             if(batchCounter.get()> avgStartBatch){
               jobQpsStat.add(listenedRate)
               avgJobQps = jobQpsStat.tryAverage()
             }
+
+            val listenedFlowRate:Double= SSparkHelper.qpsAsSecond(configStageRecordMiBytes ,listenedDuration)
+
             val str =
               s"""
                  |Job listenedDuration:       ${listenedDuration}毫秒
                  |Job listenedRate            ${listenedRate}-- ${qps(listenedRate)}万/秒
+                 |Job listenedFlowRate        ${listenedFlowRate} Mi/秒
                  |Job avgJobQps:              ${avgJobQps}--        ${qps(avgJobQps )}万/秒
                  |--------------------------------------------------------------------------------------
                  |""".stripMargin
@@ -227,4 +243,6 @@ class KafkaSparkListener(sparkConf:SparkConf) extends SparkListener {
   def qps(num:Double,b:Double): Double ={
     BigDecimal(num)./(BigDecimal(b)).setScale(2,RoundingMode.HALF_UP).doubleValue()
   }
+
+
 }

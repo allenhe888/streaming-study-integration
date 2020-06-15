@@ -292,6 +292,9 @@ public class ConsumerApiDemo extends KafkaDevHelper {
         }
 
 
+
+
+
     }
 
 
@@ -809,11 +812,9 @@ public class ConsumerApiDemo extends KafkaDevHelper {
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
             props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-
             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
             TopicPartition tp = new TopicPartition("testStringPerf", 0);
             consumer.assign(Collections.singleton(tp));
-
 
             consumer.seek(tp,10);
             for (int i = 0; i < 100; i++) {
@@ -825,6 +826,40 @@ public class ConsumerApiDemo extends KafkaDevHelper {
             }
             consumer.close();
         }
+
+
+        @Test
+        public void testConsumerHuangWenData(){
+//            topic = "testTopic";
+            topic = "testStringPerf";
+            try{
+                KafkaConsumer<String, String> consumer = KafkaDevHelper.getKafkaConsumer(ImmutableMap.of(
+//                        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000",
+//                        ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "100",
+//                    ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(maxPollInterval),//10秒
+//                    ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "1000",
+//                        ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG,String.valueOf(1024*1024*10) ,//10M,1M=4034个,10M=4万个Record
+                        ConsumerConfig.GROUP_ID_CONFIG, groupId
+                ));
+//                TopicPartition tp = new TopicPartition(topic, 1);
+                List<TopicPartition> tps = ImmutableList.of(
+//                        new TopicPartition(topic, 1),
+//                        new TopicPartition(topic, 2),
+                        new TopicPartition(topic, 0)
+                );
+                consumer.assign(tps);
+                consumer.seekToBeginning(tps);
+
+                ConsumerHelp.doConsumerInFixRate(consumer, true,10000,1000);
+                consumer.close();
+
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+
+        }
+
+
     }
 
 

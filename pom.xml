@@ -18,7 +18,7 @@
         <scala.binary.version>2.11</scala.binary.version>
         <junit.version>4.12</junit.version>
         <guava.version>14.0.1</guava.version>
-        <fastjson.version>1.2.7</fastjson.version>
+        <fastjson.version>1.2.83</fastjson.version>
 
         <!-- StreamSets-->
         <streamsets.version>3.3.2-SNAPSHOT</streamsets.version>
